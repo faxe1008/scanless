@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Scanless Dashboard</title>
+    <link href="/static/tailwind.css" rel="stylesheet" />
+  </head>
+  <body class="antialiased h-full bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-300">
+    <div class="min-h-screen flex flex-col items-center justify-start p-4 space-y-6">
+      <header class="w-full max-w-xl text-center">
+        <h1 class="text-3xl sm:text-4xl font-bold">Welcome to Scanless</h1>
+        <p id="scan-id-display" class="mt-2 text-gray-700 dark:text-gray-300">Current Scan ID: <span class="font-mono">None</span></p>
+      </header>
+
+      <main class="w-full max-w-xl space-y-4">
+        <!-- Scanner selection -->
+        <section class="flex flex-col sm:flex-row items-stretch sm:items-center sm:space-x-2 space-y-2 sm:space-y-0">
+          <label for="scanner-select" class="sr-only">Select Scanner</label>
+          <select id="scanner-select" class="flex-1 p-2 border rounded-lg bg-white dark:bg-gray-800 focus:outline-none">
+            <option value="">Loading scanners...</option>
+          </select>
+          <button id="reload-scanners" class="px-4 py-2 rounded-2xl shadow bg-blue-500 text-white dark:bg-blue-700 transition-colors">Reload</button>
+        </section>
+
+        <!-- Action buttons -->
+        <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <button id="scan-btn" class="py-4 rounded-2xl shadow-lg bg-green-500 text-white text-lg dark:bg-green-700 transition-colors flex items-center justify-center relative">
+            <span id="scan-text">Scan</span>
+            <svg id="scan-spinner" class="hidden animate-spin h-6 w-6 ml-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+          </button>
+          <button id="finish-btn" class="py-4 rounded-2xl shadow-lg bg-indigo-500 text-white text-lg dark:bg-indigo-700 transition-colors">Finish</button>
+          <button id="discard-btn" class="py-4 rounded-2xl shadow-lg bg-red-500 text-white text-lg dark:bg-red-700 transition-colors">Discard</button>
+        </section>
+
+        <!-- Thumbnails -->
+        <section>
+          <h2 class="text-2xl font-semibold mb-2">Scanned Pages</h2>
+          <div id="thumbnails" class="flex overflow-x-auto space-x-4 p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <!-- Thumbnails appended here -->
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      let currentScanId = null;
+      const scanBtn = document.getElementById('scan-btn');
+      const scanText = document.getElementById('scan-text');
+      const scanSpinner = document.getElementById('scan-spinner');
+      const scanIdDisplay = document.getElementById('scan-id-display').querySelector('span');
+
+      async function loadScanners() {
+        try {
+          const res = await fetch('/scanners');
+          const scanners = await res.json();
+          const select = document.getElementById('scanner-select');
+          select.innerHTML = '';
+          scanners.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.name;
+            opt.textContent = `${s.vendor} ${s.model}`;
+            select.appendChild(opt);
+          });
+        } catch (e) {
+          console.error('Failed to load scanners', e);
+        }
+      }
+
+      document.getElementById('reload-scanners').addEventListener('click', loadScanners);
+
+      scanBtn.addEventListener('click', async () => {
+        const device = document.getElementById('scanner-select').value;
+        if (!device) return;
+        scanBtn.disabled = true;
+        scanText.textContent = 'Scanning...';
+        scanSpinner.classList.remove('hidden');
+
+        try {
+          let content = { device_name: device }
+          if (currentScanId != null) {
+            content["scan_id"] = currentScanId;
+          }
+          const res = await fetch('/scan', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(content)
+          });
+          const data = await res.json();
+          currentScanId = data.scan_id;
+          scanIdDisplay.textContent = currentScanId;
+          updateThumbnails();
+        } catch (e) {
+          console.error('Scan error', e);
+        } finally {
+          scanSpinner.classList.add('hidden');
+          scanText.textContent = 'Scan';
+          scanBtn.disabled = false;
+        }
+      });
+
+      document.getElementById('finish-btn').addEventListener('click', async () => {
+        if (!currentScanId) return;
+        const res = await fetch(`/finish_scan/${currentScanId}`, { method: 'GET' });
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `scan_${currentScanId}.pdf`;
+        a.click();
+      });
+
+      document.getElementById('discard-btn').addEventListener('click', () => {
+        currentScanId = null;
+        scanIdDisplay.textContent = 'None';
+        document.getElementById('thumbnails').innerHTML = '';
+      });
+
+      async function updateThumbnails() {
+        if (!currentScanId) return;
+        const info = await (await fetch(`/scan/${currentScanId}/info`)).json();
+        const container = document.getElementById('thumbnails');
+        container.innerHTML = '';
+        for (let i = 0; i < info.page_count; i++) {
+          const img = document.createElement('img');
+          img.src = `/scan/${currentScanId}/image/${i}`;
+          img.className = 'h-32 sm:h-40 rounded-lg shadow-md';
+          container.appendChild(img);
+        }
+      }
+
+      // Initial load
+      loadScanners();
+    </script>
+  </body>
+</html>
