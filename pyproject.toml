@@ -17,3 +17,7 @@ pydantic = "^2.11.7"
 pypdf2 = "^3.0.1"
 
 [poetry.group.dev.dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
