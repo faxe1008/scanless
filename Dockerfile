@@ -9,6 +9,7 @@ ENV POETRY_VERSION=1.8.2 \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     gcc \
+    build-essential \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -17,9 +18,13 @@ RUN apt-get update && \
     tesseract-ocr-eng \
     tesseract-ocr-deu \
     libsane \
+    libsane-dev \
     sane-utils && \
     pip install "poetry==$POETRY_VERSION" && \
     rm -rf /var/lib/apt/lists/*
+
+RUN mkdir /scans
+ENV SCANLESS_OUTPUT_DIR=/scans
 
 WORKDIR /app
 

@@ -31,6 +31,10 @@ class ScanRequest(BaseModel):
     resolution: int = 300
 
 
+@app.get("/")
+def root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
 @app.get("/index.html")
 def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
